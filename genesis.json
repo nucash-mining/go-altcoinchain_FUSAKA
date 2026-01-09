@@ -14,7 +14,7 @@
     "fusakaBlock": 0,
     "xeggexForkBlock": 0,
     "xeggexForkSupport": true,
-    "hybridBlock": 100000,
+    "hybridBlock": 0,
     "hybrid": {
       "period": 15,
       "finalityThreshold": 67,
@@ -36,7 +36,7 @@
     }
   },
   "coinbase": "0x0000000000000000000000000000000000000000",
-  "difficulty": "0xE8D4A51000",
+  "difficulty": "0x400",
   "extraData": "",
   "gasLimit": "0x2fefd8",
   "nonce": "0x0000000000000042",

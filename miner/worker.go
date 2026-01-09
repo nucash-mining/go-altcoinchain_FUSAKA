@@ -993,11 +993,12 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		timestamp = parent.Time() + 1
 	}
 	// Construct the sealing block header, set the extra field if it's allowed
-	num := parent.Number()
+	// Note: We must create a new big.Int for the block number to avoid mutation issues
+	num := new(big.Int).Add(parent.Number(), common.Big1)
 	header := &types.Header{
 		ParentHash: parent.Hash(),
-		Number:     num.Add(num, common.Big1),
-		GasLimit:   core.CalcGasLimitWithConfig(parent.GasLimit(), w.config.GasCeil, w.chainConfig, num.Add(num, common.Big1)),
+		Number:     num,
+		GasLimit:   core.CalcGasLimitWithConfig(parent.GasLimit(), w.config.GasCeil, w.chainConfig, num),
 		Time:       timestamp,
 		Coinbase:   genParams.coinbase,
 	}
