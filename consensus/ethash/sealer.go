@@ -156,9 +156,9 @@ search:
 			break search
 
 		default:
-			// We don't have to update hash rate on every nonce, so update after after 2^X nonces
+			// Update hash rate more frequently for accurate reporting (every 1024 attempts)
 			attempts++
-			if (attempts % (1 << 15)) == 0 {
+			if (attempts % (1 << 10)) == 0 {
 				ethash.hashrate.Mark(attempts)
 				attempts = 0
 			}
@@ -169,6 +169,9 @@ search:
 				header = types.CopyHeader(header)
 				header.Nonce = types.EncodeNonce(nonce)
 				header.MixDigest = common.BytesToHash(digest)
+
+				// Mark hashrate before reporting the found block
+				ethash.hashrate.Mark(attempts)
 
 				// Seal and return a block (if still needed)
 				select {

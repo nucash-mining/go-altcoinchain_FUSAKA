@@ -110,3 +110,14 @@ func (api *API) SubmitHashrate(rate hexutil.Uint64, id common.Hash) bool {
 func (api *API) GetHashrate() uint64 {
 	return uint64(api.ethash.Hashrate())
 }
+
+// GetLocalHashrate returns the local hashrate directly from the meter (for debugging).
+func (api *API) GetLocalHashrate() map[string]interface{} {
+	return map[string]interface{}{
+		"rate1":   api.ethash.hashrate.Rate1(),
+		"rate5":   api.ethash.hashrate.Rate5(),
+		"rate15":  api.ethash.hashrate.Rate15(),
+		"count":   api.ethash.hashrate.Count(),
+		"powMode": api.ethash.config.PowMode,
+	}
+}
