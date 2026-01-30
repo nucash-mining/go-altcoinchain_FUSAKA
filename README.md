@@ -45,6 +45,7 @@ chmod +x geth bootnode clef
   --ws.api eth,net,web3,personal,miner,txpool \
   --ws.origins "*" \
   --bootnodes "enode://9355a3870bb3c7882a51797c6633380359c827febdbd89c87c0ff72914b351caf1642e5326ba78532f249082aad7c08d524cd418514865a49f8a5bca200ecbba@154.12.237.243:30303,enode://926900ccd1e2f218ce0d3c31f731eb1af1be60049624db9a01fa73588157f3fb7fd04c5f0874ca7cc030ab79d836c1961c3ef67aefe09f352e8a7aba03d3cdbf@154.12.237.243:30304,enode://c2e73bd6232c73ab7887d92aa904413597638ebf935791ca197bdd7902560baa7a4e8a1235b6d10d121ffc4602373476e7daa7d20d326466a5ae423be6581707@99.248.100.186:31303" \
+  --ethstats=YourNodeName:alt@alt-stat.outsidethebox.top \
   --syncmode snap \
   --gcmode full \
   --maxpeers 50 \
@@ -61,7 +62,7 @@ chmod +x geth bootnode clef
 .\geth.exe --datadir %USERPROFILE%\.altcoinchain init genesis.json
 
 # Start node
-.\geth.exe --datadir %USERPROFILE%\.altcoinchain --networkid 2330 --port 31303 --http --http.addr 127.0.0.1 --http.port 8332 --http.api eth,net,web3,personal,miner,txpool,debug --ws --ws.addr 127.0.0.1 --ws.port 8333 --ws.api eth,net,web3,personal,miner,txpool --bootnodes "enode://9355a3870bb3c7882a51797c6633380359c827febdbd89c87c0ff72914b351caf1642e5326ba78532f249082aad7c08d524cd418514865a49f8a5bca200ecbba@154.12.237.243:30303,enode://926900ccd1e2f218ce0d3c31f731eb1af1be60049624db9a01fa73588157f3fb7fd04c5f0874ca7cc030ab79d836c1961c3ef67aefe09f352e8a7aba03d3cdbf@154.12.237.243:30304,enode://c2e73bd6232c73ab7887d92aa904413597638ebf935791ca197bdd7902560baa7a4e8a1235b6d10d121ffc4602373476e7daa7d20d326466a5ae423be6581707@99.248.100.186:31303" --syncmode snap --maxpeers 50 --cache 512
+.\geth.exe --datadir %USERPROFILE%\.altcoinchain --networkid 2330 --port 31303 --http --http.addr 127.0.0.1 --http.port 8332 --http.api eth,net,web3,personal,miner,txpool,debug --ws --ws.addr 127.0.0.1 --ws.port 8333 --ws.api eth,net,web3,personal,miner,txpool --bootnodes "enode://9355a3870bb3c7882a51797c6633380359c827febdbd89c87c0ff72914b351caf1642e5326ba78532f249082aad7c08d524cd418514865a49f8a5bca200ecbba@154.12.237.243:30303,enode://926900ccd1e2f218ce0d3c31f731eb1af1be60049624db9a01fa73588157f3fb7fd04c5f0874ca7cc030ab79d836c1961c3ef67aefe09f352e8a7aba03d3cdbf@154.12.237.243:30304,enode://c2e73bd6232c73ab7887d92aa904413597638ebf935791ca197bdd7902560baa7a4e8a1235b6d10d121ffc4602373476e7daa7d20d326466a5ae423be6581707@99.248.100.186:31303" --ethstats=YourNodeName:alt@alt-stat.outsidethebox.top --syncmode snap --maxpeers 50 --cache 512
 ```
 
 ## Report Your Node to Ethstats
@@ -69,7 +70,7 @@ chmod +x geth bootnode clef
 Add the `--ethstats` flag to report your node to the network stats page:
 
 ```bash
---ethstats "YourNodeName:alt@alt-stat.outsidethebox.top:3100"
+--ethstats=YourNodeName:alt@alt-stat.outsidethebox.top \
 ```
 
 Your node will appear at: https://alt-stat.outsidethebox.top
@@ -198,7 +199,7 @@ After=network.target
 [Service]
 Type=simple
 User=YOUR_USER
-ExecStart=/path/to/geth --datadir /home/YOUR_USER/.altcoinchain --networkid 2330 --port 31303 --http --http.addr 127.0.0.1 --http.port 8332 --http.api eth,net,web3,personal,miner,txpool,debug --ws --ws.addr 127.0.0.1 --ws.port 8333 --ws.api eth,net,web3,personal,miner,txpool --bootnodes "enode://9355a3870bb3c7882a51797c6633380359c827febdbd89c87c0ff72914b351caf1642e5326ba78532f249082aad7c08d524cd418514865a49f8a5bca200ecbba@154.12.237.243:30303,enode://926900ccd1e2f218ce0d3c31f731eb1af1be60049624db9a01fa73588157f3fb7fd04c5f0874ca7cc030ab79d836c1961c3ef67aefe09f352e8a7aba03d3cdbf@154.12.237.243:30304,enode://c2e73bd6232c73ab7887d92aa904413597638ebf935791ca197bdd7902560baa7a4e8a1235b6d10d121ffc4602373476e7daa7d20d326466a5ae423be6581707@99.248.100.186:31303" --syncmode snap --maxpeers 50 --cache 512
+ExecStart=/path/to/geth --datadir /home/YOUR_USER/.altcoinchain --networkid 2330 --port 31303 --http --http.addr 127.0.0.1 --http.port 8332 --http.api eth,net,web3,personal,miner,txpool,debug --ws --ws.addr 127.0.0.1 --ws.port 8333 --ws.api eth,net,web3,personal,miner,txpool --bootnodes "enode://9355a3870bb3c7882a51797c6633380359c827febdbd89c87c0ff72914b351caf1642e5326ba78532f249082aad7c08d524cd418514865a49f8a5bca200ecbba@154.12.237.243:30303,enode://926900ccd1e2f218ce0d3c31f731eb1af1be60049624db9a01fa73588157f3fb7fd04c5f0874ca7cc030ab79d836c1961c3ef67aefe09f352e8a7aba03d3cdbf@154.12.237.243:30304,enode://c2e73bd6232c73ab7887d92aa904413597638ebf935791ca197bdd7902560baa7a4e8a1235b6d10d121ffc4602373476e7daa7d20d326466a5ae423be6581707@99.248.100.186:31303" --ethstats=YourNodeName:alt@alt-stat.outsidethebox.top --syncmode snap --maxpeers 50 --cache 512
 Restart=on-failure
 RestartSec=10
 
