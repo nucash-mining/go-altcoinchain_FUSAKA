@@ -63,26 +63,35 @@ var (
 	MainnetTerminalTotalDifficulty, _ = new(big.Int).SetString("58_750_000_000_000_000_000_000", 0)
 
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
+	// Altcoinchain (chain ID 2330) has all EVM forks activated from genesis.
 	MainnetChainConfig = &ChainConfig{
 		ChainID:                 big.NewInt(2330), //2330
-		HomesteadBlock:          big.NewInt(1_150_000),
-		DAOForkBlock:            big.NewInt(1_920_000),
-		DAOForkSupport:          true,
-		EIP150Block:             big.NewInt(2_463_000),
-		EIP150Hash:              common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
-		EIP155Block:             big.NewInt(2_675_000),
-		EIP158Block:             big.NewInt(2_675_000),
-		ByzantiumBlock:          big.NewInt(4_370_000),
-		ConstantinopleBlock:     big.NewInt(7_280_000),
-		PetersburgBlock:         big.NewInt(7_280_000),
-		IstanbulBlock:           big.NewInt(9_069_000),
-		MuirGlacierBlock:        big.NewInt(9_200_000),
-		BerlinBlock:             big.NewInt(12_244_000),
-		LondonBlock:             big.NewInt(12_965_000),
-		ArrowGlacierBlock:       big.NewInt(13_773_000),
-		GrayGlacierBlock:        big.NewInt(15_050_000),
-		EthPoWForkBlock:         big.NewInt(90_000),
-		EthPoWForkSupport:       true,
+		HomesteadBlock:          big.NewInt(0),
+		DAOForkBlock:            nil,
+		DAOForkSupport:          false,
+		EIP150Block:             big.NewInt(0),
+		EIP150Hash:              common.Hash{},
+		EIP155Block:             big.NewInt(0),
+		EIP158Block:             big.NewInt(0),
+		ByzantiumBlock:          big.NewInt(0),
+		ConstantinopleBlock:     big.NewInt(0),
+		PetersburgBlock:         big.NewInt(0),
+		IstanbulBlock:           big.NewInt(0),
+		MuirGlacierBlock:        nil,
+		BerlinBlock:             big.NewInt(0),
+		LondonBlock:             big.NewInt(0),
+		ArrowGlacierBlock:       nil,
+		GrayGlacierBlock:        nil,
+		HybridBlock:             big.NewInt(7_000_000),
+		Hybrid: &HybridConfig{
+			Period:                 12,  // 12 second block time like Ethereum
+			FinalityThreshold:      67,
+			AttestationWindow:      32,
+			StakingContract:        common.HexToAddress("0x139fa30605591055aceada5e841a2252d33b14c7"),
+			MinStake:               (*hexutil.Big)(hexutil.MustDecodeBig("0x1bc16d674ec800000")), // 32 ALT
+			MinerRewardPercent:     50,  // 50% to PoW miner (1 ALT)
+			ValidatorRewardPercent: 50,  // 50% to PoS validator (1 ALT)
+		},
 		ChainID_ALT:             big.NewInt(2330), //2330
 		TerminalTotalDifficulty: nil,              // 58_750_000_000_000_000_000_000
 		Ethash:                  new(EthashConfig),

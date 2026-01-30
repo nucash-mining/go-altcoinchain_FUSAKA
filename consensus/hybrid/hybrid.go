@@ -18,6 +18,10 @@
 // It wraps the existing ethash PoW engine and adds PoS finality through validator
 // attestations. Miners create blocks using PoW, and validators with 32+ ALT stake
 // attest to blocks for finality.
+//
+// Block Rewards (2 ALT total per block):
+//   - 1 ALT to the PoW miner who found the block
+//   - 1 ALT to the PoS validator pool (distributed based on stake)
 package hybrid
 
 import (
@@ -46,6 +50,13 @@ var (
 	ErrValidatorNotActive = errors.New("validator not active")
 	// ErrInsufficientStake is returned when validator has insufficient stake
 	ErrInsufficientStake = errors.New("insufficient stake")
+
+	// HybridBlockReward is the total block reward in hybrid mode (2 ALT)
+	HybridBlockReward = big.NewInt(2e18)
+	// HybridMinerReward is the PoW miner reward (1 ALT)
+	HybridMinerReward = big.NewInt(1e18)
+	// HybridValidatorReward is the PoS validator reward (1 ALT)
+	HybridValidatorReward = big.NewInt(1e18)
 )
 
 // Config contains the configuration parameters of the hybrid consensus engine.
@@ -198,35 +209,25 @@ func (h *Hybrid) Finalize(chain consensus.ChainHeaderReader, header *types.Heade
 		return
 	}
 
-	// Calculate block reward (same as ethash)
-	blockReward := ethash.FrontierBlockReward
-	if config.IsByzantium(header.Number) {
-		blockReward = ethash.ByzantiumBlockReward
-	}
-	if config.IsConstantinople(header.Number) {
-		blockReward = ethash.ConstantinopleBlockReward
-	}
+	// Hybrid block rewards: 1 ALT to PoW miner, 1 ALT to PoS validators
+	// Total: 2 ALT per block
+	minerReward := new(big.Int).Set(HybridMinerReward)
+	validatorReward := new(big.Int).Set(HybridValidatorReward)
 
-	// Split rewards between miner and validators
-	minerReward := new(big.Int).Mul(blockReward, big.NewInt(int64(h.config.MinerRewardPercent)))
-	minerReward.Div(minerReward, big.NewInt(100))
-
-	validatorReward := new(big.Int).Mul(blockReward, big.NewInt(int64(h.config.ValidatorRewardPercent)))
-	validatorReward.Div(validatorReward, big.NewInt(100))
-
-	// Calculate uncle rewards (same formula as ethash, but from miner's portion)
+	// Calculate uncle rewards (reduced in hybrid mode)
+	// Uncle creators get 1/8 of miner reward, miner gets small bonus
 	r := new(big.Int)
 	for _, uncle := range uncles {
 		r.Add(uncle.Number, big.NewInt(8))
 		r.Sub(r, header.Number)
-		r.Mul(r, blockReward)
+		r.Mul(r, HybridMinerReward)
 		r.Div(r, big.NewInt(8))
-		// Uncle reward comes from total, reduce miner reward
+		// Uncle reward
 		uncleCreatorReward := new(big.Int).Set(r)
 		statedb.AddBalance(uncle.Coinbase, uncleCreatorReward)
 
-		// Miner gets 1/32 of block reward per uncle
-		r.Div(blockReward, big.NewInt(32))
+		// Miner gets 1/32 of miner reward per uncle included
+		r.Div(HybridMinerReward, big.NewInt(32))
 		minerReward.Add(minerReward, r)
 	}
 

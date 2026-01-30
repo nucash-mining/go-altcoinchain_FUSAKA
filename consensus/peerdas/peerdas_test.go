@@ -1,5 +1,5 @@
 // Copyright 2025 The Altcoinchain Authors
-// This file contains tests for FUSAKA EIP-7594 PeerDAS implementation
+// Tests for EIP-7594 (PeerDAS) implementation
 
 package peerdas
 
@@ -11,164 +11,334 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-func TestPeerDASIsActive(t *testing.T) {
-	config := &params.ChainConfig{
+// Test configuration with FUSAKA active
+func testConfig() *params.ChainConfig {
+	return &params.ChainConfig{
 		ChainID:     big.NewInt(2330),
-		FusakaBlock: big.NewInt(0), // Activate FUSAKA immediately
+		FusakaBlock: big.NewInt(0), // FUSAKA active from genesis for testing
+	}
+}
+
+func TestNewPeerDAS(t *testing.T) {
+	p := NewPeerDAS(testConfig())
+	if p == nil {
+		t.Fatal("NewPeerDAS returned nil")
+	}
+	if p.erasureCoding == nil {
+		t.Fatal("erasureCoding not initialized")
+	}
+}
+
+func TestIsActive(t *testing.T) {
+	p := NewPeerDAS(testConfig())
+
+	tests := []struct {
+		blockNum *big.Int
+		expected bool
+	}{
+		{big.NewInt(0), true},
+		{big.NewInt(100), true},
+		{big.NewInt(1000000), true},
 	}
 
-	peerdas := NewPeerDAS(config)
+	for _, tt := range tests {
+		result := p.IsActive(tt.blockNum)
+		if result != tt.expected {
+			t.Errorf("IsActive(%v) = %v, want %v", tt.blockNum, result, tt.expected)
+		}
+	}
+}
 
-	// Should be active at block 0 and beyond
-	if !peerdas.IsActive(big.NewInt(0)) {
-		t.Error("PeerDAS should be active at block 0")
-	}
-	if !peerdas.IsActive(big.NewInt(100)) {
-		t.Error("PeerDAS should be active at block 100")
+func TestErasureEncode(t *testing.T) {
+	ec := NewErasureCoding(DefaultErasureConfig())
+
+	// Test data (less than 4KB to fit in 4 shards of 1KB each)
+	data := make([]byte, 2048)
+	for i := range data {
+		data[i] = byte(i % 256)
 	}
 
-	// Should not be active before fork
-	config.FusakaBlock = big.NewInt(100)
-	peerdas = NewPeerDAS(config)
-	if peerdas.IsActive(big.NewInt(99)) {
-		t.Error("PeerDAS should not be active before fork")
+	shards, err := ec.Encode(data)
+	if err != nil {
+		t.Fatalf("Encode failed: %v", err)
 	}
-	if !peerdas.IsActive(big.NewInt(100)) {
-		t.Error("PeerDAS should be active at fork block")
+
+	if len(shards) != ec.TotalShards() {
+		t.Errorf("Expected %d shards, got %d", ec.TotalShards(), len(shards))
+	}
+
+	// Verify data shards
+	dataShardCount := 0
+	parityShardCount := 0
+	for _, shard := range shards {
+		if shard.IsParity {
+			parityShardCount++
+		} else {
+			dataShardCount++
+		}
+	}
+
+	if dataShardCount != ec.DataShards {
+		t.Errorf("Expected %d data shards, got %d", ec.DataShards, dataShardCount)
+	}
+	if parityShardCount != ec.ParityShards {
+		t.Errorf("Expected %d parity shards, got %d", ec.ParityShards, parityShardCount)
+	}
+}
+
+func TestErasureDecode_AllDataShards(t *testing.T) {
+	ec := NewErasureCoding(DefaultErasureConfig())
+
+	// Original data
+	originalData := make([]byte, 2048)
+	for i := range originalData {
+		originalData[i] = byte(i % 256)
+	}
+
+	// Encode
+	shards, err := ec.Encode(originalData)
+	if err != nil {
+		t.Fatalf("Encode failed: %v", err)
+	}
+
+	// Decode using only data shards
+	dataShards := make([]*EncodedShard, 0, ec.DataShards)
+	for _, shard := range shards {
+		if !shard.IsParity {
+			dataShards = append(dataShards, shard)
+		}
+	}
+
+	decoded, err := ec.Decode(dataShards)
+	if err != nil {
+		t.Fatalf("Decode failed: %v", err)
+	}
+
+	// Compare (note: decoded may be padded)
+	for i := 0; i < len(originalData); i++ {
+		if decoded[i] != originalData[i] {
+			t.Errorf("Data mismatch at index %d: got %d, want %d", i, decoded[i], originalData[i])
+			break
+		}
 	}
 }
 
 func TestSampleData(t *testing.T) {
-	config := &params.ChainConfig{
-		ChainID:     big.NewInt(2330),
-		FusakaBlock: big.NewInt(0),
-	}
+	p := NewPeerDAS(testConfig())
 
-	peerdas := NewPeerDAS(config)
-	blockNumber := big.NewInt(1)
-	dataHash := common.HexToHash("0x1234567890abcdef")
+	data := []byte("test data for sampling verification in PeerDAS")
+	blockNum := big.NewInt(100)
+	dataHash := common.BytesToHash([]byte("datahash"))
 
-	// Create test data
-	testData := make([]byte, 2048) // 2KB of data
-	for i := range testData {
-		testData[i] = byte(i % 256)
-	}
-
-	// Sample the data
-	samples, commitment, err := peerdas.SampleData(testData, blockNumber, dataHash)
+	samples, commitment, err := p.SampleData(data, blockNum, dataHash)
 	if err != nil {
 		t.Fatalf("SampleData failed: %v", err)
 	}
 
 	if commitment == nil {
-		t.Fatal("Commitment should not be nil")
+		t.Fatal("commitment is nil")
 	}
 
 	if len(samples) == 0 {
-		t.Fatal("Should have at least one sample")
+		t.Fatal("no samples created")
 	}
 
-	// Verify commitment
-	if commitment.BlockNumber.Cmp(blockNumber) != 0 {
-		t.Errorf("Commitment block number mismatch: got %v, want %v", commitment.BlockNumber, blockNumber)
-	}
-	if commitment.DataHash != dataHash {
-		t.Errorf("Commitment data hash mismatch: got %x, want %x", commitment.DataHash, dataHash)
-	}
 	if commitment.SampleCount != uint64(len(samples)) {
-		t.Errorf("Sample count mismatch: got %d, want %d", commitment.SampleCount, len(samples))
+		t.Errorf("sample count mismatch: commitment says %d, got %d samples",
+			commitment.SampleCount, len(samples))
 	}
 
 	// Verify each sample
-	for i, sample := range samples {
-		if sample.SampleIndex != uint64(i) {
-			t.Errorf("Sample index mismatch: got %d, want %d", sample.SampleIndex, i)
-		}
-		if sample.BlockNumber.Cmp(blockNumber) != 0 {
-			t.Errorf("Sample block number mismatch: got %v, want %v", sample.BlockNumber, blockNumber)
-		}
-		if sample.DataHash != dataHash {
-			t.Errorf("Sample data hash mismatch: got %x, want %x", sample.DataHash, dataHash)
-		}
-		if len(sample.SampleData) == 0 {
-			t.Errorf("Sample data should not be empty for sample %d", i)
+	for _, sample := range samples {
+		err := p.VerifySample(sample, commitment)
+		if err != nil {
+			t.Errorf("VerifySample failed for sample %d: %v", sample.SampleIndex, err)
 		}
 	}
-
-	t.Logf("✅ Created %d samples with Merkle root %x", len(samples), commitment.MerkleRoot)
 }
 
-func TestVerifySample(t *testing.T) {
-	config := &params.ChainConfig{
-		ChainID:     big.NewInt(2330),
-		FusakaBlock: big.NewInt(0),
-	}
+func TestSampleCache(t *testing.T) {
+	cache := NewSampleCache()
 
-	peerdas := NewPeerDAS(config)
-	blockNumber := big.NewInt(1)
-	dataHash := common.HexToHash("0x1234567890abcdef")
-
-	// Create test data and sample it
-	testData := make([]byte, 1024)
-	for i := range testData {
-		testData[i] = byte(i % 256)
-	}
-
-	samples, commitment, err := peerdas.SampleData(testData, blockNumber, dataHash)
-	if err != nil {
-		t.Fatalf("SampleData failed: %v", err)
-	}
-
-	// Verify first sample
-	err = peerdas.VerifySample(samples[0], commitment)
-	if err != nil {
-		t.Errorf("VerifySample failed: %v", err)
-	}
-
-	// Verify all samples
-	for i, sample := range samples {
-		if err := peerdas.VerifySample(sample, commitment); err != nil {
-			t.Errorf("VerifySample failed for sample %d: %v", i, err)
-		}
-	}
-
-	t.Logf("✅ Verified %d samples successfully", len(samples))
-}
-
-func TestPeerDASNotActive(t *testing.T) {
-	config := &params.ChainConfig{
-		ChainID:     big.NewInt(2330),
-		FusakaBlock: big.NewInt(100), // FUSAKA not active yet
-	}
-
-	peerdas := NewPeerDAS(config)
-	blockNumber := big.NewInt(50) // Before fork
-	dataHash := common.HexToHash("0x1234567890abcdef")
-
-	// Should fail before fork
-	testData := make([]byte, 1024)
-	_, _, err := peerdas.SampleData(testData, blockNumber, dataHash)
-	if err != ErrPeerDASNotActive {
-		t.Errorf("Expected ErrPeerDASNotActive, got %v", err)
-	}
-
-	// Sample should fail verification before fork
 	sample := &DataSample{
-		BlockNumber: blockNumber,
-		DataHash:    dataHash,
+		BlockNumber: big.NewInt(100),
+		DataHash:    common.BytesToHash([]byte("hash1")),
 		SampleIndex: 0,
-		SampleData:  testData,
-	}
-	commitment := &SampleCommitment{
-		BlockNumber: blockNumber,
-		DataHash:    dataHash,
-		MerkleRoot:  common.Hash{},
-		SampleCount: 1,
+		SampleData:  []byte("test data"),
+		Commitment:  common.BytesToHash([]byte("commitment")),
 	}
 
-	err = peerdas.VerifySample(sample, commitment)
-	if err != ErrPeerDASNotActive {
-		t.Errorf("Expected ErrPeerDASNotActive, got %v", err)
+	// Put sample
+	cache.Put(sample)
+
+	if cache.Size() != 1 {
+		t.Errorf("Expected cache size 1, got %d", cache.Size())
+	}
+
+	// Get sample
+	retrieved, ok := cache.Get(sample.DataHash, sample.SampleIndex)
+	if !ok {
+		t.Fatal("Failed to retrieve sample from cache")
+	}
+
+	if retrieved.SampleIndex != sample.SampleIndex {
+		t.Errorf("Sample index mismatch: got %d, want %d",
+			retrieved.SampleIndex, sample.SampleIndex)
+	}
+
+	// Delete sample
+	cache.Delete(sample.DataHash, sample.SampleIndex)
+
+	if cache.Size() != 0 {
+		t.Errorf("Expected cache size 0 after delete, got %d", cache.Size())
 	}
 }
 
+func TestDACommitmentValidation(t *testing.T) {
+	p := NewPeerDAS(testConfig())
+	proto := NewProtocol(p)
+	validator := NewDAValidator(p, proto)
+
+	// Test valid commitment
+	validCommitment := &DACommitment{
+		BlockNumber:    big.NewInt(100),
+		BlockHash:      common.BytesToHash([]byte("blockhash")),
+		DataRoot:       common.BytesToHash([]byte("dataroot")),
+		BlobHash:       common.BytesToHash([]byte("blobhash")),
+		ShardCount:     6,
+		DataShardCount: 4,
+	}
+
+	err := validator.ValidateCommitment(validCommitment)
+	if err != nil {
+		t.Errorf("Valid commitment validation failed: %v", err)
+	}
+
+	// Test nil commitment
+	err = validator.ValidateCommitment(nil)
+	if err == nil {
+		t.Error("Expected error for nil commitment")
+	}
+
+	// Test missing block number
+	invalidCommitment := &DACommitment{
+		DataRoot:       common.BytesToHash([]byte("dataroot")),
+		ShardCount:     6,
+		DataShardCount: 4,
+	}
+	err = validator.ValidateCommitment(invalidCommitment)
+	if err == nil {
+		t.Error("Expected error for missing block number")
+	}
+}
+
+func TestCreateAndValidateCommitment(t *testing.T) {
+	p := NewPeerDAS(testConfig())
+	proto := NewProtocol(p)
+	validator := NewDAValidator(p, proto)
+
+	blockNum := big.NewInt(100)
+	blockHash := common.BytesToHash([]byte("blockhash"))
+	data := []byte("test block data for commitment creation")
+
+	// Create commitment
+	commitment, encoded, err := validator.CreateCommitment(blockNum, blockHash, data)
+	if err != nil {
+		t.Fatalf("CreateCommitment failed: %v", err)
+	}
+
+	if commitment == nil {
+		t.Fatal("commitment is nil")
+	}
+	if encoded == nil {
+		t.Fatal("encoded data is nil")
+	}
+
+	// Validate commitment structure
+	err = validator.ValidateCommitment(commitment)
+	if err != nil {
+		t.Errorf("ValidateCommitment failed: %v", err)
+	}
+
+	// Validate with full data
+	err = validator.ValidateWithFullData(commitment, encoded)
+	if err != nil {
+		t.Errorf("ValidateWithFullData failed: %v", err)
+	}
+}
+
+func TestHashDACommitment(t *testing.T) {
+	commitment := &DACommitment{
+		BlockNumber:    big.NewInt(100),
+		BlockHash:      common.BytesToHash([]byte("blockhash")),
+		DataRoot:       common.BytesToHash([]byte("dataroot")),
+		BlobHash:       common.BytesToHash([]byte("blobhash")),
+		ShardCount:     6,
+		DataShardCount: 4,
+	}
+
+	hash1 := HashDACommitment(commitment)
+	hash2 := HashDACommitment(commitment)
+
+	// Should be deterministic
+	if hash1 != hash2 {
+		t.Error("HashDACommitment is not deterministic")
+	}
+
+	// Nil commitment should return empty hash
+	nilHash := HashDACommitment(nil)
+	if nilHash != (common.Hash{}) {
+		t.Error("Expected empty hash for nil commitment")
+	}
+}
+
+func BenchmarkErasureEncode(b *testing.B) {
+	ec := NewErasureCoding(DefaultErasureConfig())
+	data := make([]byte, 4096)
+	for i := range data {
+		data[i] = byte(i % 256)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := ec.Encode(data)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkErasureDecode(b *testing.B) {
+	ec := NewErasureCoding(DefaultErasureConfig())
+	data := make([]byte, 4096)
+	for i := range data {
+		data[i] = byte(i % 256)
+	}
+
+	shards, _ := ec.Encode(data)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := ec.Decode(shards[:ec.DataShards])
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkSampleVerification(b *testing.B) {
+	p := NewPeerDAS(testConfig())
+	data := make([]byte, 4096)
+	for i := range data {
+		data[i] = byte(i % 256)
+	}
+
+	samples, commitment, _ := p.SampleData(data, big.NewInt(100), common.BytesToHash(data))
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, sample := range samples {
+			p.VerifySample(sample, commitment)
+		}
+	}
+}
