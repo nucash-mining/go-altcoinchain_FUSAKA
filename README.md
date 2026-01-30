@@ -46,6 +46,10 @@ geth --mine --http --networkid 2330 --datadir /path/to/data/dir```
 Attach a console ```
 geth attach /path/to/data/dir/geth.ipc```
 
+Add bootnode
+
+```--bootnodes "enode://fa06fc9a3781fc02fcdd2a7f707bc437918891275512ca200dd49e778ac465d98cfcacfbed099db7e55324bd309e3130776be7d4c884793d7c43e9534688c207@62.72.177.111:31304,enode://f3c5e84f876d579ddbb26cb5cd523e7076aa262e7097f3b026b56ec7706f18abc6fb833f52aef0ea9300d30dd7ddcd45bb903738bece4b0ee9581ae1e368188d@62.72.177.111:31303"```
+
 Add enodes 
 Connect some of these nodes from console
 
