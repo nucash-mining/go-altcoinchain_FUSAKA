@@ -1,10 +1,9 @@
 #!/bin/bash
 # Altcoinchain Wallet Launcher
-# Starts the node with bootnodes, React server, and Electron wallet
+# Starts the node with bootnodes and Electron wallet
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WALLET_DIR="$SCRIPT_DIR"
-REACT_DIR="$(dirname "$SCRIPT_DIR")/wallet-react"
 GETH_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 GETH_BIN="$GETH_DIR/build/bin/geth"
 DATADIR="$HOME/.altcoinchain"
@@ -143,36 +142,6 @@ else
         PEERS=$((16#$PEER_COUNT))
         info "Connected to $PEERS peers"
     fi
-fi
-
-# Check if React wallet is running
-if curl -s http://localhost:3000 > /dev/null 2>&1; then
-    log "React wallet server is already running"
-else
-    log "Starting React wallet server..."
-    cd "$REACT_DIR"
-
-    # Check if node_modules exists
-    if [ ! -d "node_modules" ]; then
-        warn "Installing dependencies..."
-        npm install > "$DATADIR/npm-install.log" 2>&1
-    fi
-
-    npm start > "$DATADIR/wallet-react.log" 2>&1 &
-    REACT_PID=$!
-    echo $REACT_PID > "$DATADIR/react.pid"
-
-    log "Waiting for wallet server to start (this may take a moment)..."
-    for i in {1..90}; do
-        if curl -s http://localhost:3000 > /dev/null 2>&1; then
-            log "Wallet server is ready on http://localhost:3000"
-            break
-        fi
-        if [ $((i % 10)) -eq 0 ]; then
-            info "Still starting... ($i seconds)"
-        fi
-        sleep 1
-    done
 fi
 
 # Launch the Electron wallet
