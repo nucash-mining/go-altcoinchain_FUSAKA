@@ -633,8 +633,14 @@
           </div>
         </div>
         <div class="actions">
-          <button class="btn btn-primary" onclick="createWallet()">Create Wallet</button>
+          <button class="btn btn-primary" onclick="showWatchDialog()">Watch Address</button>
           <button class="btn btn-secondary" onclick="showImportDialog()">Import Key</button>
+        </div>
+        <div class="import-key" id="watch-dialog" style="display: none;">
+          <label>Watch Address (view balances only)</label>
+          <input type="text" id="watch-address" placeholder="0x...">
+          <button class="btn btn-primary" onclick="addWatchAddress()">Add Address</button>
+          <div id="watch-msg"></div>
         </div>
         <div class="import-key" id="import-dialog" style="display: none;">
           <label>Private Key</label>
@@ -809,10 +815,11 @@
           totalBalance += balanceWei;
           const balanceAlt = (Number(balanceWei) / 1e18).toFixed(4);
 
+          const watchLabel = wallet.watchOnly ? ' <span style="color:#666;font-size:10px;">(watch)</span>' : '';
           html += `
             <div class="wallet-item">
               <div>
-                <div class="wallet-address">${wallet.address.slice(0, 10)}...${wallet.address.slice(-8)}</div>
+                <div class="wallet-address">${wallet.address.slice(0, 10)}...${wallet.address.slice(-8)}${watchLabel}</div>
               </div>
               <div class="wallet-balance">${balanceAlt} ALT</div>
             </div>
@@ -833,19 +840,47 @@
       document.getElementById('total-balance').textContent = (Number(totalBalance) / 1e18).toFixed(4) + ' ALT';
     }
 
-    function createWallet() {
-      const array = new Uint8Array(32);
-      crypto.getRandomValues(array);
-      const privateKey = '0x' + Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
-
-      // Simple key to address (keccak256 of public key, last 20 bytes)
-      // For proper implementation, use ethers.js
-      importPrivateKey(privateKey);
+    function showWatchDialog() {
+      document.getElementById('watch-dialog').style.display =
+        document.getElementById('watch-dialog').style.display === 'none' ? 'block' : 'none';
+      document.getElementById('import-dialog').style.display = 'none';
     }
 
     function showImportDialog() {
-      const dialog = document.getElementById('import-dialog');
-      dialog.style.display = dialog.style.display === 'none' ? 'block' : 'none';
+      document.getElementById('import-dialog').style.display =
+        document.getElementById('import-dialog').style.display === 'none' ? 'block' : 'none';
+      document.getElementById('watch-dialog').style.display = 'none';
+    }
+
+    function addWatchAddress() {
+      const address = document.getElementById('watch-address').value.trim();
+      const msgEl = document.getElementById('watch-msg');
+
+      if (!address || !address.startsWith('0x') || address.length !== 42) {
+        msgEl.innerHTML = '<div class="error-msg">Please enter a valid address (0x...)</div>';
+        return;
+      }
+
+      if (wallets.find(w => w.address.toLowerCase() === address.toLowerCase())) {
+        msgEl.innerHTML = '<div class="error-msg">Address already added</div>';
+        return;
+      }
+
+      wallets.push({ address: address, watchOnly: true });
+      localStorage.setItem('altcoinchain_wallets', JSON.stringify(wallets));
+
+      document.getElementById('watch-address').value = '';
+      document.getElementById('watch-dialog').style.display = 'none';
+      msgEl.innerHTML = '<div class="success-msg">Address added!</div>';
+
+      updateWallets();
+      updateTokens();
+      updateNFTs();
+      setTimeout(() => msgEl.innerHTML = '', 3000);
+    }
+
+    function createWallet() {
+      alert('For security, please use an external wallet to generate keys, then use "Watch Address" to view balances.');
     }
 
     async function importWallet() {
@@ -991,10 +1026,15 @@
     async function getTokenBalance(tokenAddress, walletAddress, decimals = 18) {
       try {
         const data = ERC20_ABI.balanceOf + encodeAddress(walletAddress);
+        console.log(`Getting balance for ${walletAddress} on token ${tokenAddress}`);
+        console.log(`Call data: ${data}`);
         const result = await callContract(tokenAddress, data);
+        console.log(`Result: ${result}`);
         const balance = decodeUint(result);
+        console.log(`Decoded balance: ${balance}`);
         return Number(balance) / Math.pow(10, decimals);
-      } catch {
+      } catch (error) {
+        console.error('Error getting token balance:', error);
         return 0;
       }
     }
