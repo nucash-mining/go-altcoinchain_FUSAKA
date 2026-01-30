@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, nativeImage } = require('electron');
+const { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain } = require('electron');
 const path = require('path');
 const http = require('http');
 
@@ -7,6 +7,29 @@ let tray = null;
 
 const RPC_URL = 'http://127.0.0.1:8332';
 const CHAIN_ID = 2330;
+
+// IPC handlers for window controls
+ipcMain.on('window-minimize', () => {
+  if (mainWindow) mainWindow.minimize();
+});
+
+ipcMain.on('window-maximize', () => {
+  if (mainWindow) {
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize();
+    } else {
+      mainWindow.maximize();
+    }
+  }
+});
+
+ipcMain.on('window-close', () => {
+  if (mainWindow) mainWindow.close();
+});
+
+ipcMain.handle('window-is-maximized', () => {
+  return mainWindow ? mainWindow.isMaximized() : false;
+});
 
 // Check if geth node is running
 async function checkNodeStatus() {
@@ -65,16 +88,17 @@ function createWindow() {
     frame: false,
     titleBarStyle: 'hidden',
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
       webSecurity: false
     },
     backgroundColor: '#0a0a0a',
     show: false
   });
 
-  // Load the React wallet
-  mainWindow.loadURL('http://localhost:3000');
+  // Load the local wallet HTML
+  mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
