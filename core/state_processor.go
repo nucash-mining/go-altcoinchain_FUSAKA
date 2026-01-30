@@ -31,13 +31,45 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// Blacklist logic
+// Blacklist logic - controlled by XeggeXBlockingEnabled in params/xeggex.go
 var (
 	ErrBlacklisted = errors.New("address is blacklisted")
-	Blacklist      = map[common.Address]bool{
-		common.HexToAddress("0x5CcCcb6d334197c7C4ba94E7873d0ef11381CD4e"): true,
-	}
 )
+
+// isAddressUnblocked checks the governance contract to see if an address has been unblocked.
+// Returns true if the address is allowed to transact (unblocked or governance says OK).
+func isAddressUnblocked(statedb *state.StateDB, addr common.Address) bool {
+	// If blocking is disabled globally, allow all
+	if !params.XeggeXBlockingEnabled {
+		return true
+	}
+
+	// If it's not the XeggeX wallet, allow
+	if addr != params.XeggeXWallet {
+		return true
+	}
+
+	// If governance contract is not set (zero address), use default blocking
+	if params.XeggeXGovernanceContract == (common.Address{}) {
+		return false // blocked by default when no governance
+	}
+
+	// Check the governance contract - verify it exists
+	ret := statedb.GetCode(params.XeggeXGovernanceContract)
+	if len(ret) == 0 {
+		return false // No contract deployed, keep blocked
+	}
+
+	// Check if a storage slot is set for this address in the governance contract
+	// The contract uses: mapping(address => bool) public unblocked; at slot 1
+	// Storage slot = keccak256(abi.encode(address, 1))
+	// If value is non-zero (true), address is unblocked
+	slot := common.BigToHash(big.NewInt(1))
+	storageKey := crypto.Keccak256Hash(append(common.LeftPadBytes(addr.Bytes(), 32), slot.Bytes()...))
+	value := statedb.GetState(params.XeggeXGovernanceContract, storageKey)
+
+	return value != (common.Hash{})
+}
 
 // StateProcessor is a basic Processor, which takes care of transitioning
 // state from one point to another.
@@ -76,12 +108,15 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		gp          = new(GasPool).AddGas(block.GasLimit())
 	)
 
-	// Check for blacklisted addresses
+	// Check for blacklisted addresses (XeggeX blocking with governance contract support)
 	signer := types.MakeSigner(p.config, header.Number)
 	for i, tx := range block.Transactions() {
 		from, err := types.Sender(signer, tx)
-		if err == nil && Blacklist[from] {
-			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), ErrBlacklisted)
+		if err == nil && params.XeggeXBlockingEnabled && from == params.XeggeXWallet {
+			// Check governance contract - if address is unblocked, allow the transaction
+			if !isAddressUnblocked(statedb, from) {
+				return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), ErrBlacklisted)
+			}
 		}
 	}
 

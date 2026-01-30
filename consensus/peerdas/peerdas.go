@@ -31,13 +31,23 @@ var (
 
 // PeerDAS manages Peer Data Availability Sampling for the FUSAKA upgrade
 type PeerDAS struct {
-	config *params.ChainConfig
+	config        *params.ChainConfig
+	erasureCoding *ErasureCoding
 }
 
 // NewPeerDAS creates a new PeerDAS manager
 func NewPeerDAS(config *params.ChainConfig) *PeerDAS {
 	return &PeerDAS{
-		config: config,
+		config:        config,
+		erasureCoding: NewErasureCoding(DefaultErasureConfig()),
+	}
+}
+
+// NewPeerDASWithErasure creates a PeerDAS manager with custom erasure config
+func NewPeerDASWithErasure(config *params.ChainConfig, erasureConfig *ErasureConfig) *PeerDAS {
+	return &PeerDAS{
+		config:        config,
+		erasureCoding: NewErasureCoding(erasureConfig),
 	}
 }
 
@@ -88,8 +98,10 @@ func (p *PeerDAS) VerifySample(sample *DataSample, commitment *SampleCommitment)
 		}
 	}
 
-	// TODO: Add erasure coding verification
-	// This requires Reed-Solomon or similar erasure coding implementation
+	// Verify erasure coding integrity if this is an encoded shard
+	if err := p.verifyErasureCoding(sample); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -134,6 +146,72 @@ func (p *PeerDAS) verifyMerkleProof(sample *DataSample, commitment *SampleCommit
 	}
 
 	return nil
+}
+
+// verifyErasureCoding verifies erasure coding integrity for a sample
+func (p *PeerDAS) verifyErasureCoding(sample *DataSample) error {
+	if sample == nil || len(sample.SampleData) == 0 {
+		return ErrInvalidSample
+	}
+
+	// Verify commitment using the same SHA256 method as calculateSampleHash
+	// This ensures consistency between sample creation and verification
+	expectedHash := p.calculateSampleHash(sample.SampleData, sample.SampleIndex)
+	if sample.Commitment != expectedHash {
+		return ErrSampleVerificationFailed
+	}
+
+	return nil
+}
+
+// GetErasureCoding returns the erasure coding instance
+func (p *PeerDAS) GetErasureCoding() *ErasureCoding {
+	return p.erasureCoding
+}
+
+// EncodeBlockData encodes block data using erasure coding for availability sampling
+func (p *PeerDAS) EncodeBlockData(data []byte, blockNumber *big.Int) (*ErasureEncodedData, error) {
+	if !p.IsActive(blockNumber) {
+		return nil, ErrPeerDASNotActive
+	}
+	return p.erasureCoding.EncodeForBlock(data, blockNumber)
+}
+
+// CanReconstructData checks if available samples are sufficient for reconstruction
+func (p *PeerDAS) CanReconstructData(samples []*DataSample) bool {
+	// Convert samples to encoded shards
+	shards := make([]*EncodedShard, len(samples))
+	for i, sample := range samples {
+		shards[i] = &EncodedShard{
+			Index:       int(sample.SampleIndex),
+			Data:        sample.SampleData,
+			IsParity:    int(sample.SampleIndex) >= p.erasureCoding.DataShards,
+			Commitment:  sample.Commitment,
+			BlockNumber: sample.BlockNumber,
+		}
+	}
+	return p.erasureCoding.CanReconstruct(shards)
+}
+
+// ReconstructData reconstructs original data from available samples
+func (p *PeerDAS) ReconstructData(samples []*DataSample, metadata *ErasureEncodedData) ([]byte, error) {
+	if !p.CanReconstructData(samples) {
+		return nil, ErrInsufficientShards
+	}
+
+	// Convert samples to encoded shards
+	shards := make([]*EncodedShard, len(samples))
+	for i, sample := range samples {
+		shards[i] = &EncodedShard{
+			Index:       int(sample.SampleIndex),
+			Data:        sample.SampleData,
+			IsParity:    int(sample.SampleIndex) >= p.erasureCoding.DataShards,
+			Commitment:  sample.Commitment,
+			BlockNumber: sample.BlockNumber,
+		}
+	}
+
+	return p.erasureCoding.DecodeFromBlock(metadata, shards)
 }
 
 // sampleIndexToKey converts a sample index to a key for Merkle tree
