@@ -83,7 +83,7 @@ func DefaultConfig() *Config {
 		Period:                 15,
 		FinalityThreshold:      67,
 		AttestationWindow:      32,
-		StakingContract:        common.HexToAddress("0x0000000000000000000000000000000000001000"),
+		StakingContract:        common.HexToAddress("0x45be3647d64fe1c251efc5054d4016271d42d12c"),
 		MinStake:               new(big.Int).Mul(big.NewInt(32), big.NewInt(1e18)), // 32 ALT
 		MinerRewardPercent:     70,
 		ValidatorRewardPercent: 30,
@@ -234,10 +234,32 @@ func (h *Hybrid) Finalize(chain consensus.ChainHeaderReader, header *types.Heade
 	// Credit miner
 	statedb.AddBalance(header.Coinbase, minerReward)
 
-	// Credit validator rewards to the staking contract
-	// Validators can claim their share proportionally based on stake
+	// Distribute validator rewards to online validators
+	// The reward is split among all validators who attested recently
 	stakingContract := h.config.StakingContract
-	statedb.AddBalance(stakingContract, validatorReward)
+	onlineValidators := h.getOnlineValidators()
+
+	if len(onlineValidators) > 0 {
+		// Split reward among online validators
+		rewardPerValidator := new(big.Int).Div(validatorReward, big.NewInt(int64(len(onlineValidators))))
+
+		for _, validator := range onlineValidators {
+			// Add the reward to staking contract, earmarked for this validator
+			// The contract's distributeRewards function will handle distribution
+			statedb.AddBalance(stakingContract, rewardPerValidator)
+		}
+
+		h.log.Debug("Validator rewards distributed",
+			"block", header.Number,
+			"onlineValidators", len(onlineValidators),
+			"rewardPerValidator", rewardPerValidator)
+	} else {
+		// No online validators, reward goes to staking contract pool
+		statedb.AddBalance(stakingContract, validatorReward)
+		h.log.Debug("No online validators, reward to contract pool",
+			"block", header.Number,
+			"reward", validatorReward)
+	}
 
 	// Store the validator reward for tracking/logging
 	h.mu.Lock()
@@ -469,4 +491,18 @@ func (h *Hybrid) GetPendingValidatorReward() *big.Int {
 		return big.NewInt(0)
 	}
 	return new(big.Int).Set(h.pendingValidatorReward)
+}
+
+// getOnlineValidators returns validators who have attested within the attestation window.
+func (h *Hybrid) getOnlineValidators() []common.Address {
+	h.validatorsLock.RLock()
+	defer h.validatorsLock.RUnlock()
+
+	var online []common.Address
+	for addr, v := range h.validators {
+		if v.Active && v.LastAttestation > 0 {
+			online = append(online, addr)
+		}
+	}
+	return online
 }

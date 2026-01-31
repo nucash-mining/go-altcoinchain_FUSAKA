@@ -10,25 +10,11 @@
     "petersburgBlock": 0,
     "istanbulBlock": 0,
     "berlinBlock": 0,
-    "londonBlock": 0,
-    "fusakaBlock": 0,
-    "xeggexForkBlock": 0,
-    "xeggexForkSupport": true,
-    "hybridBlock": 7000000,
-    "hybrid": {
-      "period": 15,
-      "finalityThreshold": 67,
-      "attestationWindow": 32,
-      "stakingContract": "0x139fa30605591055aceada5e841a2252d33b14c7",
-      "minStake": "0x1bc16d674ec800000",
-      "minerRewardPercent": 50,
-      "validatorRewardPercent": 50
-    }
+    "londonBlock": 0
   },
   "alloc": {
-    "0xAcf4Ac8668C587Cc47e401925dDe5b806fa27e9a": {
-      "balance": "0x34F086F3B33B68400000"
-    }
+    "0xAcf4Ac8668C587Cc47e401925dDe5b806fa27e9a":
+     { "balance": "0x34F086F3B33B68400000" }
   },
   "coinbase": "0x0000000000000000000000000000000000000000",
   "difficulty": "0xE8D4A51000",
